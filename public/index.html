@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Auction System</title>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem; display: flex; justify-content: center; }
+        .container { background: #1e293b; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); width: 100%; max-width: 600px; }
+        h1 { margin-top: 0; color: #38bdf8; }
+        .input-group { margin-bottom: 1rem; }
+        input, select, button { padding: 0.75rem; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white; width: 100%; box-sizing: border-box; }
+        button { background: #38bdf8; color: #0f172a; font-weight: bold; cursor: pointer; border: none; margin-top: 0.5rem; transition: background 0.2s; }
+        button:hover { background: #0ea5e9; }
+        #log { background: #020617; padding: 1rem; border-radius: 6px; height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.9rem; color: #10b981; margin-top: 1rem; border: 1px solid #334155;}
+        .system { color: #94a3b8; }
+        .error { color: #ef4444; }
+        .highest-bid { font-size: 2rem; font-weight: bold; color: #fbbf24; text-align: center; margin: 1rem 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Auction Room #1</h1>
+        
+        <div class="input-group">
+            <label>Select User to Login As:</label>
+            <select id="userSelect">
+                <option value="alice">Alice (ID: 1)</option>
+                <option value="bob">Bob (ID: 2)</option>
+                <option value="charlie">Charlie (ID: 3)</option>
+            </select>
+            <button onclick="connect()">Connect & Authenticate</button>
+        </div>
+
+        <div class="highest-bid" id="currentBidDisplay">Current Bid: $1000</div>
+
+        <div class="input-group" style="display: flex; gap: 0.5rem; flex-direction: row;">
+            <input type="number" id="bidAmount" placeholder="Enter bid amount (e.g., 1050)" style="flex: 1;">
+            <button onclick="placeBid()" style="width: auto; margin: 0;">Place Bid</button>
+        </div>
+
+        <div id="log"></div>
+    </div>
+
+    <script>
+        let ws;
+        let activeUserId;
+        const logDisplay = document.getElementById('log');
+
+        function log(msg, type = 'normal') {
+            const el = document.createElement('div');
+            el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            el.className = type;
+            logDisplay.appendChild(el);
+            logDisplay.scrollTop = logDisplay.scrollHeight;
+        }
+
+        async function connect() {
+            const user = document.getElementById('userSelect').value;
+            log(`Fetching JWT for ${user}...`, 'system');
+            
+            try {
+                const res = await fetch(`/auth/token?user=${user}`);
+                const data = await res.json();
+                activeUserId = data.user_id;
+                log(`Authenticated as ${data.username}. Token received.`, 'system');
+
+                // Connect WS
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/ws?token=${data.token}`;
+                
+                if (ws) { ws.close(); }
+
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = () => {
+                    log('WebSocket connection established. TLS/TCP Secured.', 'system');
+                };
+
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'NEW_HIGHEST_BID') {
+                        const amt = data.amount;
+                        const winner = data.winner_id;
+                        document.getElementById('currentBidDisplay').textContent = `Current Bid: $${amt}`;
+                        
+                        if (winner === activeUserId) {
+                            log(`You just placed the highest bid: $${amt}`);
+                        } else {
+                            log(`User ID ${winner} placed a new high bid: $${amt}`, 'system');
+                        }
+                    }
+                };
+
+                ws.onclose = () => log('WebSocket closed', 'error');
+                ws.onerror = (err) => log('WebSocket error ' + err, 'error');
+
+            } catch (err) {
+                log('Error connecting: ' + err.message, 'error');
+            }
+        }
+
+        function placeBid() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('Not connected.', 'error');
+                return;
+            }
+            const amountStr = document.getElementById('bidAmount').value;
+            const amount = parseInt(amountStr, 10);
+            if (!amount) return;
+
+            const payload = {
+                auction_id: 1,
+                amount: amount
+            };
+            ws.send(JSON.stringify(payload));
+            log(`Sent bid request for $${amount}`, 'system');
+        }
+    </script>
+</body>
+</html>
