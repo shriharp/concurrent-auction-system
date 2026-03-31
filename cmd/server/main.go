@@ -43,29 +43,90 @@ func main() {
 		ws.ServeWs(hub, w, r, engine.SubmitBid, engine.GetCurrentState)
 	})
 
-	// 2. Demo Utility: Generate a testing JWT Token
-	http.HandleFunc("/auth/token", func(w http.ResponseWriter, r *http.Request) {
-		userID := 1 // Hardcoded for demo
-		username := r.URL.Query().Get("user")
-		if username == "bob" {
-			userID = 2
-		} else if username == "charlie" {
-			userID = 3
-		} else if username == "" {
-			username = "alice"
+	// 2. Auth Endpoints: Signup and Signin
+	http.HandleFunc("/auth/signup", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
 		}
 
-		token, err := auth.GenerateToken(userID, username)
+		if req.Username == "" || req.Password == "" {
+			http.Error(w, "Username and password required", http.StatusBadRequest)
+			return
+		}
+
+		hash, err := auth.HashPassword(req.Password)
 		if err != nil {
-			http.Error(w, "Token Gen failed", 500)
+			http.Error(w, "Error processing password", http.StatusInternalServerError)
+			return
+		}
+
+		userID, err := db.CreateUser(req.Username, hash)
+		if err != nil {
+			http.Error(w, "Username already exists or DB err", http.StatusConflict)
+			return
+		}
+
+		token, err := auth.GenerateToken(userID, req.Username)
+		if err != nil {
+			http.Error(w, "Token Gen failed", http.StatusInternalServerError)
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message":  "User created successfully",
 			"token":    token,
 			"user_id":  userID,
-			"username": username,
+			"username": req.Username,
+		})
+	})
+
+	http.HandleFunc("/auth/signin", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+
+		userID, hash, err := db.GetUserByUsername(req.Username)
+		if err != nil {
+			http.Error(w, "Invalid username or password", http.StatusUnauthorized)
+			return
+		}
+
+		if !auth.CheckPasswordHash(req.Password, hash) {
+			http.Error(w, "Invalid username or password", http.StatusUnauthorized)
+			return
+		}
+
+		token, err := auth.GenerateToken(userID, req.Username)
+		if err != nil {
+			http.Error(w, "Token Gen failed", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message":  "Sign in successful",
+			"token":    token,
+			"user_id":  userID,
+			"username": req.Username,
 		})
 	})
 

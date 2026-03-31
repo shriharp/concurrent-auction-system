@@ -22,14 +22,16 @@
     <div class="container">
         <h1>Auction Room #1</h1>
         
-        <div class="input-group">
-            <label>Select User to Login As:</label>
-            <select id="userSelect">
-                <option value="alice">Alice (ID: 1)</option>
-                <option value="bob">Bob (ID: 2)</option>
-                <option value="charlie">Charlie (ID: 3)</option>
-            </select>
-            <button onclick="connect()">Connect & Authenticate</button>
+        <div class="auth-section" id="authSection">
+            <h2 style="color: #38bdf8; font-size: 1.2rem; margin-top: 0;">Authentication</h2>
+            <div class="input-group">
+                <input type="text" id="usernameInput" placeholder="Username">
+                <input type="password" id="passwordInput" placeholder="Password" style="margin-top: 0.5rem;">
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+                <button onclick="authenticate('signin')">Sign In</button>
+                <button onclick="authenticate('signup')" style="background: #10b981; color: white;">Sign Up</button>
+            </div>
         </div>
 
         <div class="highest-bid" id="currentBidDisplay">Current Bid: $1000</div>
@@ -55,15 +57,36 @@
             logDisplay.scrollTop = logDisplay.scrollHeight;
         }
 
-        async function connect() {
-            const user = document.getElementById('userSelect').value;
-            log(`Fetching JWT for ${user}...`, 'system');
+        async function authenticate(action) {
+            const user = document.getElementById('usernameInput').value;
+            const pass = document.getElementById('passwordInput').value;
+            
+            if (!user || !pass) {
+                log('Username and password are required!', 'error');
+                return;
+            }
+            
+            log(`${action === 'signup' ? 'Signing up' : 'Signing in'} as ${user}...`, 'system');
             
             try {
-                const res = await fetch(`/auth/token?user=${user}`);
+                const endpoint = action === 'signup' ? '/auth/signup' : '/auth/signin';
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: user, password: pass })
+                });
+
                 const data = await res.json();
+                
+                if (!res.ok) {
+                    throw new Error(data.message || `Authentication failed! Status: ${res.status}`);
+                }
+                
                 activeUserId = data.user_id;
-                log(`Authenticated as ${data.username}. Token received.`, 'system');
+                log(`Successfully authenticated exactly as ${data.username}. Token received.`, 'system');
+                
+                // Hide the login form entirely to show we are authenticated
+                document.getElementById('authSection').style.display = 'none';
 
                 // Connect WS
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

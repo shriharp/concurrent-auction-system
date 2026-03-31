@@ -44,6 +44,27 @@ func LogEvent(eventType, description string) {
 	}
 }
 
+// CreateUser inserts a new user with their password hash
+func CreateUser(username, passwordHash string) (int, error) {
+	var id int
+	err := DB.QueryRow(
+		"INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id",
+		username, passwordHash,
+	).Scan(&id)
+	return id, err
+}
+
+// GetUserByUsername retrieves a user's ID and password hash
+func GetUserByUsername(username string) (int, string, error) {
+	var id int
+	var hash string
+	err := DB.QueryRow(
+		"SELECT id, password_hash FROM users WHERE username = $1",
+		username,
+	).Scan(&id, &hash)
+	return id, hash, err
+}
+
 // LoadAuctions loads all active auctions
 func LoadActiveAuctions() ([]AuctionData, error) {
 	rows, err := DB.Query("SELECT id, item_name, highest_bid, status FROM auctions WHERE status = 'ACTIVE'")
