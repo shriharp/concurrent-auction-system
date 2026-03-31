@@ -114,18 +114,21 @@ The architecture includes `audit_logs` table implementations parallel to Unix `s
 - **Why?**: Placing a real-time system on standard TCP permits MITM packet inspection, capable of stealing session tokens or manipulating unencrypted bid packets. 
 - **Implementation**: Handled heavily in `main.go` via `server.ServeTLS("certs/cert.pem", "certs/key.pem")`. TLS 1.2/1.3 performs cryptographic negotiation during handshake, encrypting payload transit.
 
-### 4.2 The Authentication and Logging In Process (JWT)
-To securely identify users prior to establishing WebSocket traffic, the system implements a strict, stateless JSON Web Token (JWT) logging in process:
+### 4.2 The Authentication and Storage Process (Bcrypt & JWT)
+To securely identify users prior to establishing WebSocket traffic, the system implements a strict, PostgreSQL-backed authentication flow using bcrypt hashes and stateless JSON Web Tokens (JWT):
 
-1. **The Initial Login Endpoint (`/auth/token`)**:
-   - Clients first hit the standard HTTP REST endpoint `GET /auth/token?user=<username>`.
-   - The Go `main.go` handler processes this login request, mapping the user alias to a secure internal `userID` in the database.
-   - It invokes `auth.GenerateToken(userID, username)` from `jwt.go`.
-2. **Token Generation (HS256)**:
+1. **Persistent User Accounts & Bcrypt Hashing**:
+   - The system utilizes PostgreSQL (`users` table) to store accounts permanently with a dedicated `password_hash` column.
+   - When users register via `POST /auth/signup`, the `golang.org/x/crypto/bcrypt` library is used to salt and cryptographically hash their raw passwords before they ever touch the database disk.
+2. **The Authentication Endpoint (`/auth/signin`)**:
+   - Clients hit the `POST /auth/signin` endpoint, transmitting a JSON payload with their credentials.
+   - The server queries PostgreSQL for the user's stored hash and mathematically verifies the submitted password using `bcrypt.CompareHashAndPassword`.
+   - Upon successful verification, the engine invokes `auth.GenerateToken(userID, username)` from `jwt.go`.
+3. **Token Generation (HS256)**:
    - The `jwt.go` package utilizes the `golang-jwt/jwt` library. It crafts a payload (`jwt.MapClaims`) embedding the `user_id`, `username`, and an expiration constraint (`exp` set to +24 hours).
    - The token is cryptographically signed using `jwt.SigningMethodHS256` and a symmetric secret server key (`secretKey`). Because the signature depends on the server's private key, clients cannot forge or tamper with their `userID` without instantly invalidating the token.
    - The signed JWT is returned as JSON to the client.
-3. **The Secure Handshake Validation**:
+4. **The Secure Handshake Validation**:
    - Because standard browser WebSockets lack a native Javascript API for passing custom HTTP headers, the client connects to the WebSocket URL passing the JWT as a query parameter (`ws://localhost:8443/ws?token=eyJhbGciOi...`).
    - The server's `upgrader.go` (`ServeWs` function) intercepts this initial HTTP GET request, grabs the token string, and executes `auth.ValidateToken`.
    - The validation phase parses the HS256 HMAC signature. If valid and unexpired, it extracts the unalterable `userID`. 

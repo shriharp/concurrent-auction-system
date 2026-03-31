@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -177,12 +178,12 @@
             gap: 0.75rem;
             margin-bottom: 1.5rem;
         }
-        
+
         .bid-controls input {
             flex: 1;
             font-size: 1.1rem;
         }
-        
+
         .bid-controls button {
             width: auto;
             padding: 0 2rem;
@@ -197,46 +198,74 @@
             font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
             font-size: 0.85rem;
             color: var(--accent);
-            border: 1px solid rgba(0,0,0,0.5);
-            box-shadow: inset 0 4px 6px rgba(0,0,0,0.3);
+            border: 1px solid rgba(0, 0, 0, 0.5);
+            box-shadow: inset 0 4px 6px rgba(0, 0, 0, 0.3);
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
         }
 
-        #log .system { color: var(--text-secondary); }
-        #log .error { color: var(--error); }
-        #log .highlight { color: #38bdf8; font-weight: bold; }
-        
+        #log .system {
+            color: var(--text-secondary);
+        }
+
+        #log .error {
+            color: var(--error);
+        }
+
+        #log .highlight {
+            color: #38bdf8;
+            font-weight: bold;
+        }
+
         /* Scrollbar styles for log */
-        #log::-webkit-scrollbar { width: 6px; }
-        #log::-webkit-scrollbar-track { background: transparent; }
-        #log::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-        
+        #log::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #log::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        #log::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <!-- Auth Section -->
         <div id="authSection">
-            <h1>Welcome to fisac</h1>
+            <h1>Welcome to the Auction Management System</h1>
             <p class="subtitle">Sign in or create an account to start bidding securely.</p>
-            
+
             <div class="input-group">
                 <input type="text" id="usernameInput" placeholder="Username" autocomplete="off">
                 <input type="password" id="passwordInput" placeholder="Password">
             </div>
-            
+
             <div class="button-row">
                 <button class="btn-primary" onclick="authenticate('signin')">Sign In</button>
                 <button class="btn-secondary" onclick="authenticate('signup')">Create Account</button>
             </div>
-            
-            <div id="authError" style="color: var(--error); text-align: center; margin-top: 1rem; font-size: 0.9rem; display: none;"></div>
+
+            <div id="authError"
+                style="color: var(--error); text-align: center; margin-top: 1rem; font-size: 0.9rem; display: none;">
+            </div>
         </div>
 
         <!-- Auction Room Section -->
@@ -277,18 +306,18 @@
             const user = document.getElementById('usernameInput').value;
             const pass = document.getElementById('passwordInput').value;
             authError.style.display = 'none';
-            
+
             if (!user || !pass) {
                 authError.textContent = 'Username and password are required.';
                 authError.style.display = 'block';
                 return;
             }
-            
+
             const btn = event.target;
             const originalText = btn.textContent;
             btn.textContent = 'Please wait...';
             btn.disabled = true;
-            
+
             try {
                 const endpoint = action === 'signup' ? '/auth/signup' : '/auth/signin';
                 const res = await fetch(endpoint, {
@@ -298,25 +327,25 @@
                 });
 
                 const data = await res.json();
-                
+
                 if (!res.ok) {
                     throw new Error(data.message || `Authentication failed. Status: ${res.status}`);
                 }
-                
+
                 activeUserId = data.user_id;
                 document.getElementById('userGreeting').textContent = `Authenticated exactly as ${data.username}`;
-                
+
                 // Transition UI
                 document.getElementById('authSection').style.display = 'none';
                 document.getElementById('auctionRoom').style.display = 'block';
-                
+
                 log(`Successfully authenticated via ${action}.`, 'system');
                 log(`Token securely received. Negotiating WebSocket connection...`, 'system');
 
                 // Connect WS
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                 const wsUrl = `${protocol}//${window.location.host}/ws?token=${data.token}`;
-                
+
                 if (ws) { ws.close(); }
 
                 ws = new WebSocket(wsUrl);
@@ -330,7 +359,7 @@
                     if (data.type === 'NEW_HIGHEST_BID') {
                         const amt = data.amount;
                         const winner = data.winner_id;
-                        
+
                         // Animate price change
                         const bidDisplay = document.getElementById('currentBidDisplay');
                         bidDisplay.style.transform = 'scale(1.1)';
@@ -339,9 +368,9 @@
                             bidDisplay.style.transform = 'scale(1)';
                             bidDisplay.style.color = '#fbbf24';
                         }, 200);
-                        
+
                         bidDisplay.textContent = `$${amt}`;
-                        
+
                         if (winner === activeUserId) {
                             log(`You just secured the highest bid: <strong style="color:white">$${amt}</strong>`, 'highlight');
                         } else {
@@ -367,11 +396,11 @@
                 log('Cannot bid: Not connected to server.', 'error');
                 return;
             }
-            
+
             const bidInput = document.getElementById('bidAmount');
             const amountStr = bidInput.value;
             const amount = parseInt(amountStr, 10);
-            
+
             if (!amount) return;
 
             const payload = {
@@ -380,20 +409,21 @@
             };
             ws.send(JSON.stringify(payload));
             log(`Transmitting rapid bid request for $${amount}...`, 'system');
-            
+
             bidInput.value = ''; // clear input
             bidInput.focus();
         }
-        
+
         // Allow hitting Enter to log in
         document.getElementById('passwordInput').addEventListener('keypress', function (e) {
             if (e.key === 'Enter') authenticate('signin');
         });
-        
+
         // Allow hitting Enter to place bid
         document.getElementById('bidAmount').addEventListener('keypress', function (e) {
             if (e.key === 'Enter') placeBid();
         });
     </script>
 </body>
+
 </html>
